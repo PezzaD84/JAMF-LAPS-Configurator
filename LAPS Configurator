@@ -1,0 +1,214 @@
+#!/bin/bash
+#
+# Author  : Perry Driscoll - https://github.com/PezzaD84
+# Created : 8/8/2023
+# Updated : 10/8/2023
+# Version : v1
+#
+#########################################################################################
+# Description:
+#	Script to gather JAMF LAPS settings and edit them in a swiftdialog GUI
+#
+#########################################################################################
+# Copyright © 2023 Perry Driscoll <https://github.com/PezzaD84>
+#
+# This file is free software and is shared "as is" without any warranty of 
+# any kind. The author gives unlimited permission to copy and/or distribute 
+# it, with or without modifications, as long as this notice is preserved. 
+# All usage is at your own risk and in no event shall the authors or 
+# copyright holders be liable for any claim, damages or other liability.
+#########################################################################################
+
+##############################################################
+# Functions
+##############################################################
+
+DialogInstall(){
+	
+	pkgfile="SwiftDialog.pkg"
+	logfile="/Library/Logs/SwiftDialogInstallScript.log"
+	URL="https://github.com$(curl -sfL "$(curl -sfL "https://github.com/bartreardon/swiftDialog/releases/latest" | tr '"' "\n" | grep -i "expanded_assets" | head -1)" | tr '"' "\n" | grep -i "^/.*\/releases\/download\/.*\.pkg" | head -1)"
+	
+	# Start Log entries
+	echo "--" >> ${logfile}
+	echo "`date`: Downloading latest version." >> ${logfile}
+	
+	# Download installer
+	curl -s -L -J -o /tmp/${pkgfile} ${URL}
+	echo "`date`: Installing..." >> ${logfile}
+	
+	# Change to installer directory
+	cd /tmp
+	
+	# Install application
+	sudo installer -pkg ${pkgfile} -target /
+	sleep 5
+	echo "`date`: Deleting package installer." >> ${logfile}
+	
+	# Remove downloaded installer
+	rm /tmp/"${pkgfile}"
+	
+}
+
+##############################################################
+# Check if SwiftDialog is installed (SwiftDialog created by Bart Reardon https://github.com/bartreardon/swiftDialog)
+##############################################################
+
+if ! command -v dialog &> /dev/null
+then
+	echo "SwiftDialog is not installed. App will be installed now....."
+	sleep 2
+	
+	DialogInstall
+	
+else
+	echo "SwiftDialog is installed. Checking installed version....."
+	
+	installedVersion=$(dialog -v | sed 's/./ /6' | awk '{print $1}')
+	
+	latestVersion=$(curl -sfL "https://github.com/bartreardon/swiftDialog/releases/latest" | tr '"' "\n" | grep -i "expanded_assets" | head -1 | tr '/' ' ' | awk '{print $7}' | tr -d 'v')
+	
+	if [[ $installedVersion != $latestVersion ]]; then
+		echo "Dialog needs updating"
+		DialogInstall
+	else
+		echo "Dialog is up to date. Continuing to assemble...."
+	fi
+	sleep 3
+fi
+
+#########################################################################################
+# Get JAMF API Credentials
+#########################################################################################
+
+# First message to get JAMF Details
+DETAILS=$(dialog \
+--title "JAMF LAPS Configuration" \
+--position centre \
+--icon "/Users/drispe/Documents/**LAPS Work**/Jamf-color.png" \
+--message "Please enter your JAMF tenant details." \
+--height 300 \
+--alignment center \
+--messagefont 'name=Arial,size=16' \
+--textfield "JAMF URL:",required,prompt="https://MYCOMPANY@jamfcloud.com" \
+--textfield "JAMF Username:",required,prompt="JAMFAdmin" \
+--textfield "JAMF Password:",required,secure \
+--json)
+
+# Gather URL, Username and Password
+URL=$(echo $DETAILS | plutil -extract "JAMF URL:" raw -)
+USER=$(echo $DETAILS | plutil -extract "JAMF Username:" raw -)
+PASSWORD=$(echo $DETAILS | plutil -extract "JAMF Password:" raw -)
+
+# created base64-encoded credentials
+encodedCredentials=$( printf "$USER:$PASSWORD" | /usr/bin/iconv -t ISO-8859-1 | /usr/bin/base64 -i - )
+
+# Get JAMF Barer Token
+token=$(curl -s -H "Content-Type: application/json" -H "Authorization: Basic $encodedCredentials" -X POST "$URL/api/v1/auth/token" | plutil -extract token raw -)
+
+# Get existing JAMF LAPS Settings
+CURRENT_SETTINGS=$(curl -s -X GET $URL/api/v2/local-admin-password/settings -H 'Accept: application/json' -H "Authorization:Bearer ${token}" | plutil -convert json -r -o - -- -)
+
+# Seperate each LAPS Setting
+ONOFF=$(echo $CURRENT_SETTINGS | plutil -extract "autoDeployEnabled" raw -)
+AUTO_ROTATE=$(echo $CURRENT_SETTINGS | plutil -extract "autoRotateEnabled" raw -)
+ROTATE_TIME=$(echo $CURRENT_SETTINGS | plutil -extract "autoRotateExpirationTime" raw -)
+VIEWED_ROTATE=$(echo $CURRENT_SETTINGS | plutil -extract "passwordRotationTime" raw -)
+
+# Check if JAMF LAPS is enabled
+if [[ $ONOFF == 'true' ]]; then
+	ONOFF=On🟢
+else
+	ONOFF=Off🔴
+fi
+
+# Check if Auto-rotate is enabled
+if [[ $AUTO_ROTATE == 'true' ]]; then
+	AUTO_ROTATE=On🟢
+else
+	AUTO_ROTATE=Off🔴
+fi
+
+# Check existing rotation frequency
+if [[ $ROTATE_TIME == '2628002' ]]; then
+	ROTATE_TIME='1 Month'
+elif [[ $ROTATE_TIME == '5256005' ]]; then
+	ROTATE_TIME='2 Months'
+elif [[ $ROTATE_TIME == '7776000' ]]; then
+	ROTATE_TIME='3 Months'
+elif [[ $ROTATE_TIME == '10500000' ]]; then
+	ROTATE_TIME='4 Months'
+fi
+
+# Check existing time to rotate after viewing the password
+if [[ $VIEWED_ROTATE == '300' ]]; then
+	VIEWED_ROTATE='5 Minutes'
+elif [[ $VIEWED_ROTATE == '600' ]]; then
+	VIEWED_ROTATE='10 Minutes'
+elif [[ $VIEWED_ROTATE == '1800' ]]; then
+	VIEWED_ROTATE='30 Minutes'
+elif [[ $VIEWED_ROTATE == '3600' ]]; then
+	VIEWED_ROTATE='1 Hour'
+fi
+
+#########################################################################################
+# Message to gather new settings
+#########################################################################################
+
+# Message to gather LAPS Settings
+LAPS_SETTINGS=$(dialog \
+--title "JAMF LAPS Configuration" \
+--position centre \
+--icon "/Users/drispe/Documents/**LAPS Work**/Jamf-color.png" \
+--message "Please select the values below to configure LAPS within your JAMF tenant." \
+--height 400 \
+--alignment center \
+--messagefont 'name=Arial,size=16' \
+--infobox "### LAPS Settings: \n\n LAPS Status: $ONOFF  \n Auto-Rotation: $AUTO_ROTATE  \n Auto-Rotation frequency: $ROTATE_TIME  \n Rotation once viewed: $VIEWED_ROTATE" \
+--jsonstring '{ "selectitems" : [{"title" : "LAPS", "values" : ["On","Off"], "style" : "radio"},{"title" : "Auto-Rotation", "values" : ["On","Off"], "style" : "radio"},{"title" : "Auto-Rotation Frequency", "values" : ["1 Month","2 Months","3 Months","4 Months"], "default" : "3 Months"},{"title" : "Auto-Rotation After Password is Viewed", "values" : ["5 Minutes","10 Minutes","30 Minutes","1 Hour"], "default" : "1 Hour"}]}' \
+--json)
+
+# Seperate each LAPS Setting
+ONOFF=$(echo $LAPS_SETTINGS | plutil -extract "LAPS"."selectedValue" raw -)
+AUTO_ROTATE=$(echo $LAPS_SETTINGS | plutil -extract "Auto-Rotation"."selectedValue" raw -)
+ROTATE_TIME=$(echo $LAPS_SETTINGS | plutil -extract "Auto-Rotation Frequency"."selectedValue" raw -)
+VIEWED_ROTATE=$(echo $LAPS_SETTINGS | plutil -extract "Auto-Rotation After Password is Viewed"."selectedValue" raw -)
+
+# Check if JAMF LAPS is enabled
+if [[ $ONOFF == 'On' ]]; then
+	ONOFF=true
+else
+	ONOFF=false
+fi
+
+# Check if Auto-rotate is enabled
+if [[ $AUTO_ROTATE == 'On' ]]; then
+	AUTO_ROTATE=true
+else
+	AUTO_ROTATE=false
+fi
+
+# Check existing rotation frequency
+if [[ $ROTATE_TIME == '1 Month' ]]; then
+	ROTATE_TIME=2628002
+elif [[ $ROTATE_TIME == '2 Months' ]]; then
+	ROTATE_TIME=5256005
+elif [[ $ROTATE_TIME == '3 Months' ]]; then
+	ROTATE_TIME=7776000
+elif [[ $ROTATE_TIME == '4 Months' ]]; then
+	ROTATE_TIME=10500000
+fi
+
+# Check existing time to rotate after viewing the password
+if [[ $VIEWED_ROTATE == '5 Minutes' ]]; then
+	VIEWED_ROTATE=300
+elif [[ $VIEWED_ROTATE == '10 Minutes' ]]; then
+	VIEWED_ROTATE=600
+elif [[ $VIEWED_ROTATE == '30 Minutes' ]]; then
+	VIEWED_ROTATE=1800
+elif [[ $VIEWED_ROTATE == '1 Hour' ]]; then
+	VIEWED_ROTATE=3600
+fi
+	
+# Upload new settings to JAMF
+curl -s -X PUT "$URL/api/v2/local-admin-password/settings" -H 'Accept: application/json' -H "Authorization:Bearer ${token}" -H 'content-type: application/json' -d "{\"autoDeployEnabled\":$ONOFF,\"passwordRotationTime\":$VIEWED_ROTATE,\"autoRotateEnabled\":$AUTO_ROTATE,\"autoRotateExpirationTime\":$ROTATE_TIME}"
