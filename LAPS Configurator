@@ -85,7 +85,7 @@ fi
 DETAILS=$(dialog \
 --title "JAMF LAPS Configuration" \
 --position centre \
---icon "/Users/drispe/Documents/**LAPS Work**/Jamf-color.png" \
+--icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please enter your JAMF tenant details." \
 --height 300 \
 --alignment center \
@@ -159,7 +159,7 @@ fi
 LAPS_SETTINGS=$(dialog \
 --title "JAMF LAPS Configuration" \
 --position centre \
---icon "/Users/drispe/Documents/**LAPS Work**/Jamf-color.png" \
+--icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please select the values below to configure LAPS within your JAMF tenant." \
 --height 400 \
 --alignment center \
