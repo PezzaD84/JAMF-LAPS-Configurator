@@ -83,7 +83,7 @@ fi
 
 # First message to get JAMF Details
 DETAILS=$(dialog \
---title "JAMF LAPS Configuration" \
+--title "JAMF LAPS Configurator" \
 --position centre \
 --icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please enter your JAMF tenant details." \
@@ -157,7 +157,7 @@ fi
 
 # Message to gather LAPS Settings
 LAPS_SETTINGS=$(dialog \
---title "JAMF LAPS Configuration" \
+--title "JAMF LAPS Configurator" \
 --position centre \
 --icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please select the values below to configure LAPS within your JAMF tenant." \
