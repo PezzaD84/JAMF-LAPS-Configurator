@@ -162,6 +162,7 @@ LAPS_SETTINGS=$(dialog \
 --icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please select the values below to configure LAPS within your JAMF tenant." \
 --height 400 \
+--width 850 \
 --alignment center \
 --messagefont 'name=Arial,size=16' \
 --infobox "### LAPS Settings: \n\n LAPS Status: $ONOFF  \n Auto-Rotation: $AUTO_ROTATE  \n Auto-Rotation frequency: $ROTATE_TIME  \n Rotation once viewed: $VIEWED_ROTATE" \
