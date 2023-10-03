@@ -2,8 +2,8 @@
 #
 # Author  : Perry Driscoll - https://github.com/PezzaD84
 # Created : 8/8/2023
-# Updated : 10/8/2023
-# Version : v1
+# Updated : 3/10/2023
+# Version : v1.1
 #
 #########################################################################################
 # Description:
@@ -87,18 +87,26 @@ DETAILS=$(dialog \
 --position centre \
 --icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please enter your JAMF tenant details." \
+--button1text "Continue" \
+--button2text "Quit" \
 --height 300 \
 --alignment center \
 --messagefont 'name=Arial,size=16' \
 --textfield "JAMF URL:",required,prompt="https://MYCOMPANY@jamfcloud.com" \
 --textfield "JAMF Username:",required,prompt="JAMFAdmin" \
 --textfield "JAMF Password:",required,secure \
---json)
+--json
+)
 
 # Gather URL, Username and Password
 URL=$(echo $DETAILS | plutil -extract "JAMF URL:" raw -)
 USER=$(echo $DETAILS | plutil -extract "JAMF Username:" raw -)
 PASSWORD=$(echo $DETAILS | plutil -extract "JAMF Password:" raw -)
+
+if [[ $USER == "" ]] || [[ $PASSWORD == "" ]] || [[ $URL == "" ]]; then
+	echo "Aborting"
+	exit 1
+fi
 
 # created base64-encoded credentials
 encodedCredentials=$( printf "$USER:$PASSWORD" | /usr/bin/iconv -t ISO-8859-1 | /usr/bin/base64 -i - )
@@ -161,19 +169,21 @@ LAPS_SETTINGS=$(dialog \
 --position centre \
 --icon "https://github.com/PezzaD84/JAMFLAPS-Configurator/blob/main/Jamf-color.png?raw=true" \
 --message "Please select the values below to configure LAPS within your JAMF tenant." \
+--button1text "Continue" \
+--button2text "Quit" \
 --height 400 \
 --width 850 \
 --alignment center \
 --messagefont 'name=Arial,size=16' \
 --infobox "### LAPS Settings: \n\n LAPS Status: $ONOFF  \n Auto-Rotation: $AUTO_ROTATE  \n Auto-Rotation frequency: $ROTATE_TIME  \n Rotation once viewed: $VIEWED_ROTATE" \
---jsonstring '{ "selectitems" : [{"title" : "LAPS", "values" : ["On","Off"], "style" : "radio"},{"title" : "Auto-Rotation", "values" : ["On","Off"], "style" : "radio"},{"title" : "Auto-Rotation Frequency", "values" : ["1 Month","2 Months","3 Months","4 Months"], "default" : "3 Months"},{"title" : "Auto-Rotation After Password is Viewed", "values" : ["5 Minutes","10 Minutes","30 Minutes","1 Hour"], "default" : "1 Hour"}]}' \
+--jsonstring '{ "selectitems" : [{"title" : "LAPS", "values" : ["On","Off"], "style" : "radio"},{"title" : "Auto-Rotation", "values" : ["On","Off"], "style" : "radio"},{"title" : "Auto-Rotation Frequency", "values" : ["1 Month","2 Months","3 Months","4 Months"], "default" : "3 Months"},{"title" : "Rotation After Password is Viewed", "values" : ["5 Minutes","10 Minutes","30 Minutes","1 Hour"], "default" : "1 Hour"}]}' \
 --json)
 
 # Seperate each LAPS Setting
 ONOFF=$(echo $LAPS_SETTINGS | plutil -extract "LAPS"."selectedValue" raw -)
 AUTO_ROTATE=$(echo $LAPS_SETTINGS | plutil -extract "Auto-Rotation"."selectedValue" raw -)
 ROTATE_TIME=$(echo $LAPS_SETTINGS | plutil -extract "Auto-Rotation Frequency"."selectedValue" raw -)
-VIEWED_ROTATE=$(echo $LAPS_SETTINGS | plutil -extract "Auto-Rotation After Password is Viewed"."selectedValue" raw -)
+VIEWED_ROTATE=$(echo $LAPS_SETTINGS | plutil -extract "Rotation After Password is Viewed"."selectedValue" raw -)
 
 # Check if JAMF LAPS is enabled
 if [[ $ONOFF == 'On' ]]; then
@@ -210,6 +220,11 @@ elif [[ $VIEWED_ROTATE == '30 Minutes' ]]; then
 elif [[ $VIEWED_ROTATE == '1 Hour' ]]; then
 	VIEWED_ROTATE=3600
 fi
-	
+
 # Upload new settings to JAMF
-curl -s -X PUT "$URL/api/v2/local-admin-password/settings" -H 'Accept: application/json' -H "Authorization:Bearer ${token}" -H 'content-type: application/json' -d "{\"autoDeployEnabled\":$ONOFF,\"passwordRotationTime\":$VIEWED_ROTATE,\"autoRotateEnabled\":$AUTO_ROTATE,\"autoRotateExpirationTime\":$ROTATE_TIME}"
+curl -s -X PUT "$URL/api/v2/local-admin-password/settings" -H 'Accept: application/json' -H "Authorization:Bearer ${token}" -H 'content-type: application/json' -d '{
+"autoDeployEnabled": '$ONOFF',
+"passwordRotationTime": '$VIEWED_ROTATE',
+"autoRotateEnabled": '$AUTO_ROTATE',
+"autoRotateExpirationTime": '$ROTATE_TIME'
+}'
